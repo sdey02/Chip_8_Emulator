@@ -7,6 +7,7 @@
 typedef struct {
     SDL_Window *window;
     SDL_Renderer *renderer;
+    SDL_Event *event;
 } sdl_t;
 
 // Emulator configuration object
@@ -17,6 +18,16 @@ typedef struct {
     uint32_t bg_color;          // Background color RGBA8888
     uint32_t scale_factor;      // Amount to scale Chip8 pixel by
 } config_t;
+
+typedef enum {
+    Quit,
+    Running,
+    Pause,
+} emulator_state_t;
+
+typedef struct {
+ emulator_state_t state;
+} chip_8_t;
 
 bool init_sdl(sdl_t *sdl, config_t config){
     if(SDL_InitSubSystem(SDL_INIT_TIMER | SDL_INIT_AUDIO | SDL_INIT_VIDEO) != 0){ //Checks weather SDL Init works
@@ -61,6 +72,10 @@ bool set_config_from_args(config_t *config, const int argc, char **argv) {
     return true;    // Success
 }
 
+bool init_chip8 (chip_8_t *chip8){
+    return true;
+}
+
 void final_cleanup(sdl_t *sdl){
     SDL_DestroyRenderer(sdl -> renderer);
     SDL_DestroyWindow(sdl -> window);
@@ -82,6 +97,33 @@ void update_screen(const sdl_t sdl){
     SDL_RenderPresent(sdl.renderer);
 }
 
+void handle_input(chip_8_t *chip8){
+    SDL_Event event;
+
+    while (SDL_PollEvent(&event)){
+        switch (event.type)
+        {
+        case (SDL_KEYDOWN):
+            switch (event.key.keysym.sym) {
+                case (SDLK_ESCAPE):
+                    chip8 ->state = Quit;
+                    return;
+                default:
+                    break;
+            }
+            break;
+
+        case (SDL_KEYUP):
+            /* code */
+            break;
+
+        case (SDL_QUIT):
+            chip8 ->state = Quit;
+            break;
+        }
+    } 
+}
+
 int main (int argc, char **argv){
     // Initialize Config
     config_t config = {0};
@@ -95,11 +137,19 @@ int main (int argc, char **argv){
         exit(EXIT_FAILURE);
     }
 
+    // Initialize Chip-8 Machine
+    chip_8_t chip8;
+    if (!init_chip8(&chip8)){
+        exit(EXIT_FAILURE);
+    }
     // Intitial screen clear
     clear_screen(sdl, config);
 
     // Main Loop
-    while (true){
+    while (chip8.state != Quit){
+        // Handle User Input
+        handle_input(&chip8);
+
         // Delay for 60FPS
         SDL_Delay(16);
 
