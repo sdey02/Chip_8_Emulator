@@ -38,7 +38,7 @@ typedef struct {
     uint8_t delay_timer;     // Decrement at 60hz when >0
     uint8_t sound_timer;     // Decrement at 60hz when >0 + play tone
     bool keypad[16];         // Keypad
-    char *rom_name;          // Rom Name
+    const char *rom_name;          // Rom Name
 
 } chip_8_t;
 
@@ -88,7 +88,7 @@ bool set_config_from_args(config_t *config, const int argc, char **argv) {
 
 bool init_chip8 (chip_8_t *chip8, const char rom_name[]){
     const uint32_t entry_point = 0x200 // Loaded to x200
-    const uint8_t Font[] {
+    const uint8_t font[] {
         0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
         0x20, 0x60, 0x20, 0x20, 0x70, // 1
         0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
@@ -108,11 +108,38 @@ bool init_chip8 (chip_8_t *chip8, const char rom_name[]){
     };
 
     // Load Font
-    memcpy (&chip8 ->ram[0]);
+    memcpy (&chip8 ->ram[0], font, sizeof(font));
 
     // Load ROM to CHIP 8
+    // Open ROM Size
+    FILE *rom = fopen(rom_name, "rb");
+    if (!rom){
+        SDL_LOG("ROM FILE INVALID")
+        return false
+    }
+
+    // Get and Check ROM SIZE
+    fseek(rom, 0, SEEK_END)
+    const size_t rom_size = tell(rom);
+    const size_t max_size = sizeof chip8 ->ram - entry_point;
+    rewind(rom)
+
+    if (rom_size > max_size){
+        SDL_LOG("ROM TOO BIG")
+        return false
+    }
+
+    if(fread(&chip8 ->ram[entry_point], rom_size, 1, rom) != 1){
+        SDL_LOG("Could not read ROM into CHIP8 memory.")
+        return false
+    }
+
+    fclose(rom)
+
+    //CIP8 State
     chip8 ->state = Running;
     chip8 ->PC = entry_point;
+    chip8 ->rom_name = rom_name;
 
     return true;
 }
@@ -181,7 +208,8 @@ int main (int argc, char **argv){
 
     // Initialize Chip-8 Machine
     chip_8_t chip8;
-    if (!init_chip8(&chip8)){
+    const char *rom_name[] = argv[1];
+    if (!init_chip8(&chip8, rom_name)){
         exit(EXIT_FAILURE);
     }
     // Intitial screen clear
