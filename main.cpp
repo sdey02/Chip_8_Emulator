@@ -12,23 +12,37 @@ typedef struct {
 
 // Emulator configuration object
 typedef struct {
-    uint32_t window_width;      // SDL window width
-    uint32_t window_height;     // SDL window height
-    uint32_t fg_color;          // Foreground color RGBA8888
-    uint32_t bg_color;          // Background color RGBA8888
-    uint32_t scale_factor;      // Amount to scale Chip8 pixel by
+    uint32_t window_width;      // * SDL window width
+    uint32_t window_height;     // * SDL window height
+    uint32_t fg_color;          // * Foreground color RGBA8888
+    uint32_t bg_color;          // * Background color RGBA8888
+    uint32_t scale_factor;      // * Amount to scale Chip8 pixel by
 } config_t;
 
+// Emulator states
 typedef enum {
     Quit,
     Running,
     Pause,
 } emulator_state_t;
 
+// Chip_8 Emulator Framework
 typedef struct {
- emulator_state_t state;
+    emulator_state_t state;
+    uint8_t ram[4096];
+    bool dislay;             // Uppermost 256 bytes 0xF00-0xFFF
+    uint16_t call_stack[12];
+    uint8_t V[16];           // Data Registers V0-Vf
+    uint16_t I;              // Index Register
+    uint16_t PC;             // Index Register
+    uint8_t delay_timer;     // Decrement at 60hz when >0
+    uint8_t sound_timer;     // Decrement at 60hz when >0 + play tone
+    bool keypad[16];         // Keypad
+    char *rom_name;          // Rom Name
+
 } chip_8_t;
 
+// Emulator Initialization Function
 bool init_sdl(sdl_t *sdl, config_t config){
     if(SDL_InitSubSystem(SDL_INIT_TIMER | SDL_INIT_AUDIO | SDL_INIT_VIDEO) != 0){ //Checks weather SDL Init works
         SDL_Log("Could not initialize SDL: %s\n", SDL_GetError());
@@ -72,22 +86,50 @@ bool set_config_from_args(config_t *config, const int argc, char **argv) {
     return true;    // Success
 }
 
-bool init_chip8 (chip_8_t *chip8){
+bool init_chip8 (chip_8_t *chip8, const char rom_name[]){
+    const uint32_t entry_point = 0x200 // Loaded to x200
+    const uint8_t Font[] {
+        0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+        0x20, 0x60, 0x20, 0x20, 0x70, // 1
+        0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+        0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+        0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+        0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+        0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+        0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+        0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+        0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+        0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+        0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+        0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+        0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+        0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+        0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+    };
+
+    // Load Font
+    memcpy (&chip8 ->ram[0]);
+
+    // Load ROM to CHIP 8
+    chip8 ->state = Running;
+    chip8 ->PC = entry_point;
+
     return true;
 }
 
+// Ends all SDL processes
 void final_cleanup(sdl_t *sdl){
-    SDL_DestroyRenderer(sdl -> renderer);
-    SDL_DestroyWindow(sdl -> window);
-    SDL_Quit(); //Shut Down SDL
+    SDL_DestroyRenderer(sdl -> renderer); // Destroys the renderer
+    SDL_DestroyWindow(sdl -> window);     // Destroys the window
+    SDL_Quit();                           // Shut Down SDL 
 }
 
 void clear_screen(const sdl_t sdl, const config_t config){
     // RGBA is 32 bits
     const uint8_t r = (config.bg_color >> 24) & 0xFF; //Set the of R
     const uint8_t g = (config.bg_color >> 16) & 0xFF; //Set the of G
-    const uint8_t b = (config.bg_color >> 8) & 0xFF; //Set the of B
-    const uint8_t a = (config.bg_color >> 0) & 0xFF; //Set the of A
+    const uint8_t b = (config.bg_color >> 8) & 0xFF;  //Set the of B
+    const uint8_t a = (config.bg_color >> 0) & 0xFF;  //Set the of A
 
     SDL_SetRenderDrawColor(sdl.renderer, r, g, b, a);
     SDL_RenderClear(sdl.renderer);
