@@ -5,7 +5,7 @@
 #include "SDL.H"
 
 typedef struct {
-    SDL_Window *window;
+    SDL_Window * window;
     SDL_Renderer *renderer;
     SDL_Event *event;
 } sdl_t;
@@ -26,6 +26,16 @@ typedef enum {
     Pause,
 } emulator_state_t;
 
+// CHIP8 Instruction Format
+typedef struct {
+    uint16_t opcodes;
+    uint16_t NNN;       // 12 Bit Constant
+    uint8_t NN;         // 8 Bit Constant
+    uint8_t N;          // 4 Bit Constant
+    uint8_t X;          // 4 Bit Register Identifier
+    uint8_t Y;          // 4 Bit Register Identifier
+} instruction_t;
+
 // Chip_8 Emulator Framework
 typedef struct {
     emulator_state_t state;
@@ -38,9 +48,29 @@ typedef struct {
     uint8_t delay_timer;     // Decrement at 60hz when >0
     uint8_t sound_timer;     // Decrement at 60hz when >0 + play tone
     bool keypad[16];         // Keypad
-    const char *rom_name;          // Rom Name
-
+    const char *rom_name;    // Rom Name
+    instruction_t inst;      // Current Instruction
 } chip_8_t;
+
+void chip8_opcode_00E0(Chip8 *chip8) {                              // 0x00E0: Clear the screen
+    memset(&chip8->display[0], false, sizeof chip8->display);
+    chip8->draw = true;                                             // Will update screen on next 60hz tick
+
+}
+
+void chip8_opcode_00EE(Chip8 *chip8) {
+    // ... Implement opcode 0x00EE functionality ...
+}
+
+// ... Add more opcode functions ...
+
+Chip8OpcodeFunction chip8_opcode_functions[] = {
+    chip8_opcode_00E0,
+    chip8_opcode_00EE,
+    // ... Add more opcode functions ...
+};
+
+
 
 // Emulator Initialization Function
 bool init_sdl(sdl_t *sdl, config_t config){
@@ -177,6 +207,14 @@ void handle_input(chip_8_t *chip8){
                 case (SDLK_ESCAPE):
                     chip8 ->state = Quit;
                     return;
+                case (SDLK_SPACE):
+                    if(chip8 ->Running){
+                        chip8 ->state = Pause;                   // Paused
+                        puts ("========= Paused =========")
+                    } else{
+                        chip8 ->state = Running;                 // Resume        
+                    }
+                    return;
                 default:
                     break;
             }
@@ -193,7 +231,27 @@ void handle_input(chip_8_t *chip8){
     } 
 }
 
+// 1 CHIP* Instruction Set Emulation
+void emulate_instruction(chip8_t *chip8){
+    // Get next opcode from ram
+    chip8 ->inst.opcode = chip8 ->ram[chip8 ->PC] << 8 | chip8 ->ram[chip8 ->PC + 1]
+    PC += 2; // Preincrement OPCODES
+
+    // Fill out current instruction format
+    chip8->inst.NNN = chip8->inst.opcode & 0x0FFF;
+    chip8->inst.NN = chip8->inst.opcode & 0x0FF;
+    chip8->inst.N = chip8->inst.opcode & 0x0F;
+    chip8->inst.X = (chip8->inst.opcode >> 8) & 0x0F;
+    chip8->inst.Y = (chip8->inst.opcode >> 4) & 0x0F;
+}
+
 int main (int argc, char **argv){
+    // Default Usage Message
+    if(argc < 2){
+        fprintf(stderr, "Error");
+        exit(EXIT_FAILURE);
+    }
+
     // Initialize Config
     config_t config = {0};
     if (!set_config_from_args(&config, argc, argv)){
@@ -219,6 +277,13 @@ int main (int argc, char **argv){
     while (chip8.state != Quit){
         // Handle User Input
         handle_input(&chip8);
+
+        if (chip8.state == Paused){
+            continue;
+        }
+
+        // Emulate CHIP8 Instruction
+        emulate_instruction(&chip8);
 
         // Delay for 60FPS
         SDL_Delay(16);
